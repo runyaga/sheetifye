@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sheetifye/sheetifye.dart';
 
 /// A self-contained example demonstrating the core functionality of [Sheetifye].
-/// 
+///
 /// This example shows how to:
 /// 1. Wrap your application in a [ProviderScope].
 /// 2. Load a spreadsheet from an asset.

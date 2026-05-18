@@ -21,6 +21,9 @@ import 'package:sheetifye/src/engine/layout/layout_engine.dart';
 import 'package:sheetifye/src/engine/layout/layout_interaction.dart';
 import 'package:sheetifye/src/engine/virtualization/virtualization_engine.dart';
 
+import 'package:sheetifye/src/engine/overlays/autofill_overlay_layer.dart';
+import 'package:sheetifye/src/engine/overlays/cut_overlay_layer.dart';
+
 class SheetGrid extends ConsumerStatefulWidget {
   const SheetGrid({super.key});
 
@@ -41,6 +44,12 @@ class _SheetGridState extends ConsumerState<SheetGrid> {
   double _scrollY = 0;
   final bool _isSyncing = false;
 
+  // Gesture state variables
+  bool _isSelectionDragging = false;
+  bool _isAutofillDragging = false;
+  GridRange? _autofillSourceRange;
+  GridRange? _autofillTargetRange;
+
   @override
   void initState() {
     super.initState();
@@ -55,6 +64,8 @@ class _SheetGridState extends ConsumerState<SheetGrid> {
     _overlayManager.addLayer(SelectionOverlayLayer());
     _overlayManager.addLayer(ActiveCellOverlayLayer());
     _overlayManager.addLayer(SearchOverlayLayer());
+    _overlayManager.addLayer(AutofillOverlayLayer());
+    _overlayManager.addLayer(CutOverlayLayer());
   }
 
   void _onScroll() {
@@ -76,6 +87,197 @@ class _SheetGridState extends ConsumerState<SheetGrid> {
     _verticalController.dispose();
     _textPainterCache.clear();
     super.dispose();
+  }
+
+  bool _isHitAutofillHandle(
+    Offset localPosition,
+    LayoutEngine layout,
+    SheetifyeThemeData theme,
+  ) {
+    final state = ref.read(workbookProvider);
+    if (state.activeCell == null) return false;
+
+    final selection =
+        state.mainSelection ??
+        GridRange.fromRect(
+          state.activeCell!.row,
+          state.activeCell!.column,
+          state.activeCell!.row,
+          state.activeCell!.column,
+        );
+
+    final rect = PositionResolver.getRangeRect(
+      selection,
+      state.workbook.activeSheet,
+      _scrollX,
+      _scrollY,
+      theme.rowHeaderWidth,
+      theme.columnHeaderHeight,
+      layout,
+    );
+
+    final handleCenter = rect.bottomRight;
+    const hitPadding = 12.0; // larger hit box for easier pointer/touch hits
+    final hitRect = Rect.fromCenter(
+      center: handleCenter,
+      width: hitPadding * 2,
+      height: hitPadding * 2,
+    );
+
+    return hitRect.contains(localPosition);
+  }
+
+  void _handlePointerDown(
+    PointerDownEvent event,
+    LayoutEngine layout,
+    SheetifyeThemeData theme,
+  ) {
+    if (event.buttons != kPrimaryButton) return;
+
+    // Only allow mouse dragging for cell actions (touch scrolls by default)
+    if (event.kind != PointerDeviceKind.mouse) return;
+
+    final localPosition = event.localPosition;
+
+    if (_isHitAutofillHandle(localPosition, layout, theme)) {
+      final state = ref.read(workbookProvider);
+      final selection =
+          state.mainSelection ??
+          GridRange.fromRect(
+            state.activeCell!.row,
+            state.activeCell!.column,
+            state.activeCell!.row,
+            state.activeCell!.column,
+          );
+      setState(() {
+        _isAutofillDragging = true;
+        _autofillSourceRange = selection;
+        _autofillTargetRange = null;
+      });
+    } else {
+      final double gridX = localPosition.dx - theme.rowHeaderWidth;
+      final double gridY = localPosition.dy - theme.columnHeaderHeight;
+      if (gridX >= 0 && gridY >= 0) {
+        final double adjustedX = gridX + _scrollX;
+        final double adjustedY = gridY + _scrollY;
+        final state = ref.read(workbookProvider);
+        final col = layout.getColumnIndex(
+          adjustedX,
+          state.workbook.activeSheet.columnCount,
+        );
+        final row = layout.getRowIndex(
+          adjustedY,
+          state.workbook.activeSheet.rowCount,
+        );
+
+        setState(() {
+          _isSelectionDragging = true;
+        });
+        ref.read(workbookProvider.notifier).startDrag(row, col);
+      }
+    }
+  }
+
+  void _handlePointerMove(
+    PointerMoveEvent event,
+    LayoutEngine layout,
+    Sheet sheet,
+    SheetifyeThemeData theme,
+  ) {
+    if (_isAutofillDragging && _autofillSourceRange != null) {
+      final double gridX = event.localPosition.dx - theme.rowHeaderWidth;
+      final double gridY = event.localPosition.dy - theme.columnHeaderHeight;
+      final double adjustedX = gridX + _scrollX;
+      final double adjustedY = gridY + _scrollY;
+      final col = layout.getColumnIndex(adjustedX, sheet.columnCount);
+      final row = layout.getRowIndex(adjustedY, sheet.rowCount);
+
+      // Choose whether drag is primary horizontal or vertical
+      final int rowDiff = row > _autofillSourceRange!.maxRow
+          ? (row - _autofillSourceRange!.maxRow)
+          : (row < _autofillSourceRange!.minRow
+                ? (_autofillSourceRange!.minRow - row)
+                : 0);
+      final int colDiff = col > _autofillSourceRange!.maxCol
+          ? (col - _autofillSourceRange!.maxCol)
+          : (col < _autofillSourceRange!.minCol
+                ? (_autofillSourceRange!.minCol - col)
+                : 0);
+
+      GridRange? targetRange;
+      if (rowDiff >= colDiff && rowDiff > 0) {
+        if (row > _autofillSourceRange!.maxRow) {
+          targetRange = GridRange.fromRect(
+            _autofillSourceRange!.maxRow + 1,
+            _autofillSourceRange!.minCol,
+            row,
+            _autofillSourceRange!.maxCol,
+          );
+        } else if (row < _autofillSourceRange!.minRow) {
+          targetRange = GridRange.fromRect(
+            row,
+            _autofillSourceRange!.minCol,
+            _autofillSourceRange!.minRow - 1,
+            _autofillSourceRange!.maxCol,
+          );
+        }
+      } else if (colDiff > rowDiff && colDiff > 0) {
+        if (col > _autofillSourceRange!.maxCol) {
+          targetRange = GridRange.fromRect(
+            _autofillSourceRange!.minRow,
+            _autofillSourceRange!.maxCol + 1,
+            _autofillSourceRange!.maxRow,
+            col,
+          );
+        } else if (col < _autofillSourceRange!.minCol) {
+          targetRange = GridRange.fromRect(
+            _autofillSourceRange!.minRow,
+            col,
+            _autofillSourceRange!.maxRow,
+            _autofillSourceRange!.minCol - 1,
+          );
+        }
+      }
+
+      setState(() {
+        _autofillTargetRange = targetRange;
+      });
+    } else if (_isSelectionDragging) {
+      final double gridX = event.localPosition.dx - theme.rowHeaderWidth;
+      final double gridY = event.localPosition.dy - theme.columnHeaderHeight;
+      final double adjustedX = gridX + _scrollX;
+      final double adjustedY = gridY + _scrollY;
+      final col = layout.getColumnIndex(adjustedX, sheet.columnCount);
+      final row = layout.getRowIndex(adjustedY, sheet.rowCount);
+
+      ref.read(workbookProvider.notifier).updateDrag(row, col);
+    } else {
+      // Normal panning/scrolling (runs for mobile touches or trackpad drags)
+      if (event.buttons == kPrimaryButton ||
+          event.kind == PointerDeviceKind.touch) {
+        _scrollingEngine.scrollBy(-event.delta.dx, -event.delta.dy);
+      }
+    }
+  }
+
+  void _handlePointerUp(PointerUpEvent event) {
+    if (_isAutofillDragging) {
+      if (_autofillSourceRange != null && _autofillTargetRange != null) {
+        ref
+            .read(workbookProvider.notifier)
+            .autofill(_autofillSourceRange!, _autofillTargetRange!);
+      }
+      setState(() {
+        _isAutofillDragging = false;
+        _autofillSourceRange = null;
+        _autofillTargetRange = null;
+      });
+    } else if (_isSelectionDragging) {
+      ref.read(workbookProvider.notifier).endDrag();
+      setState(() {
+        _isSelectionDragging = false;
+      });
+    }
   }
 
   @override
@@ -175,12 +377,11 @@ class _SheetGridState extends ConsumerState<SheetGrid> {
                     );
                   }
                 },
-                onPointerMove: (event) {
-                  if (event.buttons == kPrimaryButton ||
-                      event.kind == PointerDeviceKind.touch) {
-                    _scrollingEngine.scrollBy(-event.delta.dx, -event.delta.dy);
-                  }
-                },
+                onPointerDown: (event) =>
+                    _handlePointerDown(event, layout, theme),
+                onPointerMove: (event) =>
+                    _handlePointerMove(event, layout, sheet, theme),
+                onPointerUp: _handlePointerUp,
                 child: GestureDetector(
                   onTapDown: (details) =>
                       _handleGesture(details.localPosition, layout, theme),
@@ -224,12 +425,17 @@ class _SheetGridState extends ConsumerState<SheetGrid> {
                                 mainSelection: state.mainSelection,
                                 additionalSelections:
                                     state.additionalSelections,
+                                autofillRange: _autofillTargetRange,
                                 scrollX: currentX,
                                 scrollY: currentY,
                                 headerWidth: theme.rowHeaderWidth,
                                 headerHeight: theme.columnHeaderHeight,
                                 layout: layout,
                                 searchQuery: state.searchQuery,
+                                pendingCutRange:
+                                    state.pendingCutSheetId == sheet.id
+                                    ? state.pendingCutRange
+                                    : null,
                               ),
                               manager: _overlayManager,
                             ),
@@ -382,6 +588,14 @@ class _SheetGridState extends ConsumerState<SheetGrid> {
 
       final col = layout.getColumnIndex(adjustedX, sheet.columnCount);
       final row = layout.getRowIndex(adjustedY, sheet.rowCount);
+
+      if (state.isEditing) {
+        final value = state.editValue ?? '';
+        notifier.commitEdit(value);
+        if (state.activeCell?.row == row && state.activeCell?.column == col) {
+          return;
+        }
+      }
 
       if (isDoubleTap) {
         notifier.selectCell(row, col);

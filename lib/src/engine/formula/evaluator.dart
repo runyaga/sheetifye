@@ -3,8 +3,7 @@ import 'package:sheetifye/src/domain/entities/workbook.dart';
 
 class FormulaEvaluator implements ASTVisitor<dynamic> {
   final Sheet sheet;
-  final Map<String, dynamic> Function(String name, List<dynamic> args)
-  functionResolver;
+  final dynamic Function(String name, List<dynamic> args) functionResolver;
 
   FormulaEvaluator({required this.sheet, required this.functionResolver});
 
@@ -16,7 +15,12 @@ class FormulaEvaluator implements ASTVisitor<dynamic> {
   @override
   visitCellReference(CellReferenceNode node) {
     final cell = sheet.cells['${node.row},${node.col}'];
-    return cell?.value ?? 0;
+    final val = cell?.value;
+    if (val is num) return val;
+    if (val is String) {
+      return num.tryParse(val) ?? val;
+    }
+    return val ?? 0;
   }
 
   @override
@@ -25,7 +29,14 @@ class FormulaEvaluator implements ASTVisitor<dynamic> {
     for (int r = node.range.minRow; r <= node.range.maxRow; r++) {
       for (int c = node.range.minCol; c <= node.range.maxCol; c++) {
         final cell = sheet.cells['$r,$c'];
-        values.add(cell?.value ?? 0);
+        final val = cell?.value;
+        if (val is num) {
+          values.add(val);
+        } else if (val is String) {
+          values.add(num.tryParse(val) ?? val);
+        } else {
+          values.add(0);
+        }
       }
     }
     return values;

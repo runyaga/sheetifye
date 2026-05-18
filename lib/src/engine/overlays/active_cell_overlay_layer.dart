@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sheetifye/sheetifye.dart';
 import 'package:sheetifye/src/engine/overlays/overlay_manager.dart';
 import 'package:sheetifye/src/engine/overlays/position_resolver.dart';
 import 'package:sheetifye/src/core/theme/sheetifye_dimensions.dart';
@@ -40,12 +41,32 @@ class ActiveCellOverlayLayer implements OverlayLayer {
       ),
     );
 
+    // Draw active cell outline
     canvas.drawRect(rect, paint);
 
-    // Draw active cell handle
+    // Draw selection handle (autofill handle) at the bottom-right corner of the entire selection
+    final selection =
+        context.mainSelection ??
+        GridRange.fromRect(
+          context.activeCell!.row,
+          context.activeCell!.column,
+          context.activeCell!.row,
+          context.activeCell!.column,
+        );
+
+    final selectionRect = PositionResolver.getRangeRect(
+      selection,
+      context.sheet,
+      context.scrollX,
+      context.scrollY,
+      context.headerWidth,
+      context.headerHeight,
+      context.layout,
+    );
+
     const handleSize = SheetifyeDimensions.selectionHandleSize;
     final handleRect = Rect.fromCenter(
-      center: rect.bottomRight,
+      center: selectionRect.bottomRight,
       width: handleSize,
       height: handleSize,
     );

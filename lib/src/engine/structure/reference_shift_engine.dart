@@ -50,18 +50,48 @@ class _ReferenceShiftVisitor implements ASTVisitor<String> {
 
   @override
   String visitCellReference(CellReferenceNode node) {
+    // Check for sheet prefix and parse the cell coordinate part of the address
+    final parts = node.address.split('!');
+    final cellAddr = parts.last; // e.g. "$A$1" or "A1"
+
+    // Column lock: has $ before letters, e.g., $A1 or $A$1
+    final colLocked = cellAddr.startsWith('\$');
+    // Row lock: has $ before digits, e.g., A$1 or $A$1
+    final rowLocked = cellAddr.substring(colLocked ? 1 : 0).contains('\$');
+
     int r = node.row;
     int c = node.col;
 
-    if (rowAt != null && r >= rowAt!) {
+    if (!rowLocked && rowAt != null && r >= rowAt!) {
       r += rowCount;
     }
-    if (colAt != null && c >= colAt!) {
+    if (!colLocked && colAt != null && c >= colAt!) {
       c += colCount;
     }
 
     if (r < 0 || c < 0) return '#REF!';
-    return GridUtils.getAddress(r, c);
+
+    // Reconstruct sheet prefix
+    String prefix = '';
+    if (node.address.contains('!')) {
+      final idx = node.address.indexOf('!');
+      prefix = node.address.substring(0, idx + 1);
+    }
+
+    String colStr = colLocked ? '\$' : '';
+    String rowStr = rowLocked ? '\$' : '';
+
+    final newAddressWithoutLocks = GridUtils.getAddress(r, c); // e.g., "C4"
+    final match = RegExp(
+      r'^([A-Z]+)([0-9]+)$',
+    ).firstMatch(newAddressWithoutLocks);
+    if (match != null) {
+      final colLetter = match.group(1)!;
+      final rowNum = match.group(2)!;
+      return '$prefix$colStr$colLetter$rowStr$rowNum';
+    }
+
+    return '$prefix$newAddressWithoutLocks';
   }
 
   @override
@@ -81,7 +111,14 @@ class _ReferenceShiftVisitor implements ASTVisitor<String> {
     }
 
     if (minR < 0 || minC < 0) return '#REF!';
-    return '${GridUtils.getAddress(minR, minC)}:${GridUtils.getAddress(maxR, maxC)}';
+
+    // Extract optional sheet prefix e.g., Sheet1! or 'Sheet One'!
+    String prefix = '';
+    if (node.address.contains('!')) {
+      final idx = node.address.indexOf('!');
+      prefix = node.address.substring(0, idx + 1);
+    }
+    return '$prefix${GridUtils.getAddress(minR, minC)}:$prefix${GridUtils.getAddress(maxR, maxC)}';
   }
 
   @override

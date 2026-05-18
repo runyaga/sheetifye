@@ -32,6 +32,9 @@ class RecalculationEngine {
 
         // Recalculate this cell and its dependents
         _recalculate(cellAddress, sheet, onValueComputed);
+      } on CircularDependencyException {
+        onValueComputed(cellAddress, '#REF!');
+        rethrow;
       } catch (e) {
         onValueComputed(cellAddress, '#ERROR!');
       }

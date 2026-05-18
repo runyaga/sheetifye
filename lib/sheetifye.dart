@@ -9,3 +9,4 @@ export 'src/data/sources/sheetifye_source.dart';
 export 'src/core/theme/sheetifye_theme.dart';
 export 'src/core/theme/sheetifye_theme_data.dart';
 export 'src/core/utils/grid_utils.dart';
+export 'src/features/actions/models/workbook_action.dart';

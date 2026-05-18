@@ -4,6 +4,7 @@ import 'package:sheetifye/src/core/theme/sheetifye_theme.dart';
 import 'package:sheetifye/src/core/theme/sheetifye_dimensions.dart';
 import 'package:sheetifye/src/core/theme/sheetifye_spacing_tokens.dart';
 import 'package:sheetifye/src/features/workbook/state/workbook_state.dart';
+import 'package:sheetifye/src/features/actions/widgets/workbook_action_menu.dart';
 
 class SheetifyeToolbar extends ConsumerStatefulWidget {
   final WorkbookController controller;
@@ -106,7 +107,7 @@ class _SheetifyeToolbarState extends ConsumerState<SheetifyeToolbar> {
             const SizedBox(width: SheetifyeSpacingTokens.medium),
             Expanded(
               child: Text(
-                state.workbook.name,
+                '${state.workbook.name}${state.hasUnsavedChanges ? '*' : ''}',
                 style: theme.toolbarTextStyle,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -115,6 +116,7 @@ class _SheetifyeToolbarState extends ConsumerState<SheetifyeToolbar> {
               icon: Icons.search,
               onPressed: () => widget.controller.toggleSearch(),
             ),
+            const WorkbookActionMenuButton(),
           ],
         ],
       ),

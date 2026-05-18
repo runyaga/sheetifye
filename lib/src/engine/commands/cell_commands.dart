@@ -22,12 +22,15 @@ class UpdateCellCommand extends SpreadsheetCommand {
     final sheet = workbook.activeSheet;
     _oldCell = sheet.cells['$row,$col'];
 
+    final String valStr = newValue?.toString() ?? '';
+    final bool isFormula = valStr.startsWith('=');
     sheet.cells['$row,$col'] = Cell(
       id: '$row,$col',
       row: row,
       column: col,
-      value: newValue is String && newValue.startsWith('=') ? null : newValue,
-      rawInput: newValue.toString(),
+      value: isFormula ? null : newValue,
+      rawInput: valStr,
+      formula: isFormula ? valStr : null,
     );
   }
 
@@ -36,6 +39,8 @@ class UpdateCellCommand extends SpreadsheetCommand {
     final sheet = workbook.activeSheet;
     if (_oldCell != null) {
       sheet.cells['$row,$col'] = _oldCell!;
+    } else {
+      sheet.cells.remove('$row,$col');
     }
   }
 }
@@ -53,18 +58,25 @@ class UpdateRangeCommand extends SpreadsheetCommand {
   void execute(Workbook workbook) {
     final sheet = workbook.activeSheet;
     newValues.forEach((key, value) {
-      _oldCells[key] = sheet.cells[key]!;
-
       final parts = key.split(',');
       final row = int.parse(parts[0]);
       final col = int.parse(parts[1]);
 
+      if (sheet.cells.containsKey(key)) {
+        _oldCells[key] = sheet.cells[key]!;
+      } else {
+        _oldCells[key] = Cell(id: key, row: row, column: col, value: null);
+      }
+
+      final String valStr = value?.toString() ?? '';
+      final bool isFormula = valStr.startsWith('=');
       sheet.cells[key] = Cell(
         id: key,
         row: row,
         column: col,
-        value: value is String && value.startsWith('=') ? null : value,
-        rawInput: value.toString(),
+        value: isFormula ? null : value,
+        rawInput: valStr,
+        formula: isFormula ? valStr : null,
       );
     });
   }
@@ -73,7 +85,11 @@ class UpdateRangeCommand extends SpreadsheetCommand {
   void undo(Workbook workbook) {
     final sheet = workbook.activeSheet;
     _oldCells.forEach((key, cell) {
-      sheet.cells[key] = cell;
+      if (cell.value == null && cell.rawInput == null && cell.formula == null) {
+        sheet.cells.remove(key);
+      } else {
+        sheet.cells[key] = cell;
+      }
     });
   }
 }

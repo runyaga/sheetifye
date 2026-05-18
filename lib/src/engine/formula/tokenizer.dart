@@ -25,7 +25,9 @@ class FormulaTokenizer {
 
       if (RegExp(r'[0-9]').hasMatch(char)) {
         tokens.add(_readNumber());
-      } else if (RegExp(r'[A-Za-z]').hasMatch(char)) {
+      } else if (RegExp(r'[A-Za-z]').hasMatch(char) ||
+          char == "'" ||
+          char == "\$") {
         tokens.add(_readIdentifierOrReference());
       } else if (char == '"') {
         tokens.add(_readString());
@@ -92,13 +94,42 @@ class FormulaTokenizer {
 
   FormulaToken _readIdentifierOrReference() {
     final start = _pos;
-    while (_pos < input.length &&
-        RegExp(r'[A-Za-z0-9$]').hasMatch(input[_pos])) {
-      _pos++;
+
+    // Check if it starts with a single quote (indicates sheet name with spaces/special characters)
+    if (input[_pos] == "'") {
+      _pos++; // skip opening single quote
+      while (_pos < input.length && input[_pos] != "'") {
+        _pos++;
+      }
+      if (_pos < input.length) {
+        _pos++; // skip closing single quote
+      }
+      if (_pos < input.length && input[_pos] == '!') {
+        _pos++; // skip '!'
+        // Now read the A1 address part
+        while (_pos < input.length &&
+            RegExp(r'[A-Za-z0-9$]').hasMatch(input[_pos])) {
+          _pos++;
+        }
+      }
+    } else {
+      // Normal reading, allow alphanumeric, $, _, and ! for sheet-qualified references
+      while (_pos < input.length &&
+          RegExp(r'[A-Za-z0-9$_!]').hasMatch(input[_pos])) {
+        _pos++;
+      }
     }
+
     final value = input.substring(start, _pos);
 
-    // Check if it's a reference (e.g., A1, B10)
+    // Support sheet-qualified references, e.g. Sheet1!A1, 'Sheet One'!$A$1, Sheet1!$B$10
+    if (RegExp(
+      r"^(?:'?[A-Za-z0-9_\s]+'?!)?\$?[A-Z]+\$?[0-9]+$",
+    ).hasMatch(value)) {
+      return FormulaToken(FormulaTokenType.reference, value, start);
+    }
+
+    // Check if it's a standard local reference (e.g., A1, B10)
     if (RegExp(r'^\$?[A-Z]+\$?[0-9]+$').hasMatch(value)) {
       return FormulaToken(FormulaTokenType.reference, value, start);
     }

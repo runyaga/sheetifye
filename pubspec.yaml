@@ -1,6 +1,6 @@
 name: sheetifye
-description: "The high-performance Flutter Excel viewer and spreadsheet engine. Native XLSX support, virtualized rendering for millions of cells, and customizable data grid UI."
-version: 1.0.3
+description: "Flutter spreadsheet engine with XLSX/CSV support, live editing, undo/redo, formula evaluation, clipboard, autofill, and a full persistence lifecycle."
+version: 1.1.0
 homepage: https://github.com/vikaspoute/sheetifye
 repository: https://github.com/vikaspoute/sheetifye
 issue_tracker: https://github.com/vikaspoute/sheetifye/issues
@@ -10,7 +10,7 @@ topics:
   - xlsx
   - csv
   - spreadsheet
-  - viewer
+  - editor
   
 environment:
   sdk: ^3.11.5

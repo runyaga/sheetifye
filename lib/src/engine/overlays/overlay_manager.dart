@@ -4,7 +4,15 @@ import 'package:sheetifye/src/core/utils/grid_utils.dart';
 import 'package:sheetifye/src/domain/entities/workbook.dart';
 import 'package:sheetifye/src/core/theme/sheetifye_theme_data.dart';
 
-enum OverlayLayerType { selection, activeCell, editing, interaction, resize }
+enum OverlayLayerType {
+  selection,
+  activeCell,
+  editing,
+  interaction,
+  resize,
+  autofill,
+  cut,
+}
 
 abstract class OverlayLayer {
   OverlayLayerType get type;
@@ -18,12 +26,14 @@ class OverlayContext {
   final GridCoordinate? activeCell;
   final GridRange? mainSelection;
   final List<GridRange> additionalSelections;
+  final GridRange? autofillRange;
   final double scrollX;
   final double scrollY;
   final double headerWidth;
   final double headerHeight;
   final LayoutEngine layout;
   final String? searchQuery;
+  final GridRange? pendingCutRange;
 
   OverlayContext({
     required this.sheet,
@@ -31,12 +41,14 @@ class OverlayContext {
     this.activeCell,
     this.mainSelection,
     this.additionalSelections = const [],
+    this.autofillRange,
     required this.scrollX,
     required this.scrollY,
     required this.headerWidth,
     required this.headerHeight,
     required this.layout,
     this.searchQuery,
+    this.pendingCutRange,
   });
 }
 

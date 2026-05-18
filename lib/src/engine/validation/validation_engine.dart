@@ -18,8 +18,8 @@ class ValidationRule {
 
     switch (type) {
       case ValidationType.number:
-        if (value is! num) return false;
-        // Check criteria (min/max)
+        final n = value is num ? value : num.tryParse(value.toString());
+        if (n == null) return false;
         return true;
       case ValidationType.list:
         if (criteria is List) {
