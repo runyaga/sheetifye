@@ -153,7 +153,7 @@ class WorkbookExporter {
 
     final zipEncoder = ZipEncoder();
     final bytes = zipEncoder.encode(archive);
-    return Uint8List.fromList(bytes!);
+    return Uint8List.fromList(bytes);
   }
 
   static String _getColName(int colIndex) {
